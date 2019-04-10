@@ -130,26 +130,37 @@ payload.Envelope.Body.EVCOperationsJournalTransOutflow
 		</db:stored-procedure>
 		<logger level="INFO" doc:name="Logger" doc:id="477d96f3-f354-48b5-a313-109cc4a4c7dc" message="#[vars.insertedList]"/>
 	</sub-flow>
-	<flow name="mule-fileDBListenerFlow" doc:id="2605262b-87d1-463c-a1ea-b3fd95409109" initialState="stopped">
+	<flow name="mule-fileDBListenerFlow" doc:id="2605262b-87d1-463c-a1ea-b3fd95409109" initialState="started">
 		<scheduler doc:name="Scheduler" doc:id="6437cfce-12ad-43ba-a171-e998a57c8a4c" >
 			<scheduling-strategy >
 				<fixed-frequency frequency="30000" startDelay="1000"/>
 			</scheduling-strategy>
 		</scheduler>
-		<os:retrieve doc:name="Retrieve" doc:id="70f418c8-f4dc-490f-b84d-6dd80953e500" key="lastTimestamp" objectStore="watermarkStore">
-			<os:default-value ><![CDATA[#[2017-09-11T00:00:00.000Z]]]></os:default-value>
+		<os:retrieve doc:name="Retrieve" doc:id="70f418c8-f4dc-490f-b84d-6dd80953e500" key="lastTimestamp" target="lastTimestamp" objectStore="watermarkStore">
+			<os:default-value ><![CDATA[#['2017-09-11T00:00:00.000Z']]]></os:default-value>
 		</os:retrieve>
+		<logger level="INFO" doc:name="Log Last Timestamp" doc:id="f07ea601-5c7b-4c85-94f5-6a45a2964974" message="#[vars.lastTimestamp]"/>
 		<db:stored-procedure doc:name="Stored procedure" doc:id="cca44c64-a552-49a3-b901-9ea2e1d262b6" config-ref="Database_Config">
 			<db:sql >{ call sp_load_training_history (:operationsDate) }</db:sql>
 			<db:input-parameters ><![CDATA[#[{
 	"operationsDate": vars.lastTimestamp
 }]]]></db:input-parameters>
 		</db:stored-procedure>
-		<logger level="INFO" doc:name="Logger" doc:id="360574b9-dfb5-4cdd-a1c8-0906bf00be6f" message="#[payload]"/>
-		<set-variable value="#[max(payload map $.OperationsDate)]" doc:name="Set Variable" doc:id="d2445362-b3b7-457b-8e86-bf9060327c3e" variableName="maxTimestamp"/>
-		<logger level="INFO" doc:name="Logger" doc:id="3199ae12-f4ab-4a95-893d-09e7285e23dd" message="#[vars.maxTimestamp]"/>
+		<foreach doc:name="For Each" doc:id="b9c35272-940a-4722-a146-e605f733cc80" collection="payload['resultSet1']">
+			<logger level="INFO" doc:name="Logger" doc:id="13676c64-c8e7-4818-a3c6-a35c209ac4f6" message="#[payload]"/>
+			<choice doc:name="Choice" doc:id="9a75c96a-8f95-4f8a-9dfd-119038483fdc" >
+				<when expression="#[payload['OperationsDate'] as Date &gt; vars.lastTimestamp as Date]">
+					<set-variable value="#[payload['OperationsDate']]" doc:name="Set Variable" doc:id="25695bde-4659-4e4c-9086-cbcd5f5728df" variableName="lastTimestamp"/>
+					<logger level="INFO" doc:name="Log Update to LastTimestamp" doc:id="a46a4eca-cda1-4be4-a964-0d468494b09f" message="Updated lastTimestamp"/>
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="42ece018-1370-46d8-9f5d-2ac56598ab4f" message="LastTimestamp is current"/>
+				</otherwise>
+			</choice>
+		</foreach>
+		<logger level="INFO" doc:name="Logger" doc:id="3199ae12-f4ab-4a95-893d-09e7285e23dd" message="#[vars.lastTimestamp]"/>
 		<os:store doc:name="Store" doc:id="2a0dda9a-74c4-46ed-851c-c3cc0c3638da" key="lastTimestamp" objectStore="watermarkStore">
-			<os:value ><![CDATA[#[vars.maxTimestamp]]]></os:value>
+			<os:value ><![CDATA[#[vars.lastTimestamp]]]></os:value>
 		</os:store>
 	</flow>
 </mule>
