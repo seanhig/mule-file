@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:xml-module="http://www.mulesoft.org/schema/mule/xml-module" xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd
+http://www.mulesoft.org/schema/mule/xml-module http://www.mulesoft.org/schema/mule/xml-module/current/mule-xml-module.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+	<os:object-store name="watermarkStore" persistent="true"/>
+	<xml-module:config name="XML_Config" doc:name="XML Config" doc:id="5cb37b4a-013f-4aa2-b548-1b2aa7a8bef8" expandEntities="ALL" >
+		<xml-module:namespaces >
+			<xml-module:namespace prefix="ns0" uri="http://schemas.microsoft.com/dynamics/2006/02/documents/Message" />
+		</xml-module:namespaces>
+	</xml-module:config>
+	<xml-module:config name="XML_Config1" doc:name="XML Config" doc:id="da77b898-353d-41a3-a202-2d35abaf0541" >
+		<xml-module:namespaces >
+			<xml-module:namespace prefix="ns0" uri="http://schemas.microsoft.com/dynamics/2006/02/documents/Message" />
+		</xml-module:namespaces>
+	</xml-module:config>
+	<file:config name="File_Config" doc:name="File Config" doc:id="a21d03b8-ebb5-4e86-9ee4-4afd28cd4607" >
+		<file:connection workingDir="\\cgyappt11\d$\FileDropTest\" />
+	</file:config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="4f050930-8430-4a97-a5f4-cefe3eec265e" >
+		<db:mssql-connection host="localhost" user="sa" password="Fender2000" databaseName="Test" />
+	</db:config>
+	<flow name="mule-fileListenerFlow" doc:id="46a3bd69-3e84-4b6c-92b2-2b350b89d1eb" initialState="started" maxConcurrency="1">
+		<file:listener doc:name="On New or Updated File" doc:id="1e0466e6-86e6-495b-9ac3-604be040a067" config-ref="File_Config" autoDelete='true' moveToDirectory="#[vars.archiveFolder]" applyPostActionWhenFailed="false" recursive="false" directory="Mulesoft" outputMimeType="application/xml" renameTo='#["file_" ++ vars.messageId ++ "_" ++ correlationId  ++ ".xml"]'>
+			<non-repeatable-stream />
+			<scheduling-strategy >
+				<fixed-frequency frequency="5000" startDelay="1000"/>
+			</scheduling-strategy>
+			<file:matcher filenamePattern="*.xml" />
+		</file:listener>
+		<ee:transform doc:name="Transform to XML" doc:id="441213d7-cafb-4f22-9789-052860e51830" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+---
+payload
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Log XML" doc:id="aa6002a5-3457-47ce-8387-c81c11ce4968" message="#[payload]" />
+		<logger level="INFO" doc:name="Log File Path" doc:id="19bf8ab6-b102-40fb-87c1-84825158f418" message="#[attributes.path]" />
+		<ee:transform doc:name="Transform Message to JSON" doc:id="1b081265-0c17-4699-a642-e1458ee44d6c" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/xml
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="jsonPayload" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<xml-module:xpath-extract config-ref="XML_Config1" doc:name="Xpath extract" doc:id="77c0138b-b637-49d2-8341-eaa05bf082b0" xpath="/*[name()='ns0:Envelope']/*[name()='ns0:Body']/*[name()='EVCOperationsJournalTransOutflow']/*[name()='EVCOperationsJournalTrans']" target="xmlPayload"/>
+		<xml-module:xpath-extract config-ref="XML_Config1" doc:name="Xpath extract MessageId" doc:id="79ac98d1-c82d-445a-9606-e6d84b993f8e" xpath="/*[name()='ns0:Envelope']/*[name()='ns0:Header']/*[name()='ns0:MessageId']/text()" target="messageField"/>
+		<set-variable value="#[vars.messageField[0]]" doc:name="Set Variable" doc:id="1b09bed1-9394-4da8-9dfe-d85243b3a75a" variableName="messageId"/>
+		<logger level="INFO" doc:name="Log MessageId" doc:id="3e59f3f2-b5bd-498e-83f9-671d655c43f0" message="#[vars.messageId]" />
+		<choice doc:name="Choice" doc:id="779bd0b0-a16b-42ec-8daa-06db25099591" >
+			<when expression='#[vars.messageId == "{67C115C5-695C-4617-8E52-F2488C2D4722}"]'>
+				<logger level="INFO" doc:name="Log Generate Error" doc:id="28f1fc6e-6aef-465c-96e3-d78fd9515bb8" message='#[payload[3] ++ " All done!"]' />
+			</when>
+			<otherwise >
+				<set-variable value='Archive' doc:name="Set Archive Folder" doc:id="a8ee2f3c-fe06-46be-80d1-114a9878b3c2" variableName="archiveFolder"/>
+				<flow-ref doc:name="Flow Reference" doc:id="127be04d-771a-415d-87f7-90c2f8ec448d" name="mule-fileDBSub_Flow" target="processedLine" targetValue="#[payload]"/>
+				<file:write doc:name="Write File to Archive" config-ref="File_Config" path='#["Mulesoft\\Archive\\" ++ "file_" ++ vars.messageId ++ "_" ++ correlationId  ++ ".xml"]' createParentDirectories="false" doc:id="b6deddf0-da43-4776-838c-45986b05f04b" />
+				<logger level="INFO" doc:name="Logger Success" doc:id="fdce8af0-7948-4e57-8de2-7fb4aebb8d84" message="All Done!"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="0fd58c9e-a7dd-407a-9739-23c55ef1f7c0" >
+				<logger level="INFO" doc:name="Log Error" doc:id="939a3c27-0888-4ee4-a56b-4c1f57d15eea" message="#[error]"/>
+				<set-variable doc:name="Null Archive Folder" doc:id="7cf8c785-a39c-4734-a8b2-20554adac4c5" variableName="archiveFolder" value='#[""]' />
+				<file:write doc:name="Write File to Failures Folder" doc:id="8dab49d2-c497-4e61-9a44-e21d00284f8c" config-ref="File_Config" path='#["Mulesoft\\Failures\\" ++ "file_" ++ vars.messageId ++ "_" ++ correlationId  ++ ".xml"]' createParentDirectories="false"/>
+			
+</on-error-continue>
+		</error-handler>
+				
+	</flow>
+	<sub-flow name="mule-fileDBSub_Flow" doc:id="020c9ea9-9161-4c50-b354-10f20fb583e5" >
+		<logger level="INFO" doc:name="Logger" doc:id="a0905c6e-ea25-4c73-bd7d-905e07e2d6b9" message="Processing the lines"/>
+		<ee:transform doc:name="Transform Message" doc:id="f5eb4309-46c1-4da8-bcf1-22cfbf799a29" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="evcLines" ><![CDATA[%dw 2.0
+output application/json duplicateKeyAsArray=true
+---
+payload.Envelope.Body.EVCOperationsJournalTransOutflow
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="f5cbca28-55f6-42d7-9f16-e2d1a1add052" message="#[vars.evcLines]"/>
+		<foreach doc:name="For Each" doc:id="6544586f-86d1-463a-91f7-dde8845cc5da" collection="vars.evcLines.EVCOperationsJournalTrans">
+			<logger level="INFO" doc:name="Logger" doc:id="eabc3081-5704-4e93-9d3f-a4a36778ff9c" message="#[payload.Dimension.element[0]]"/>
+			<logger level="INFO" doc:name="Log the Line Payload" doc:id="4d2ae4d6-9d39-4210-a7e2-e84bdfea889d" message="#[payload]"/>
+			<db:stored-procedure doc:name="Stored procedure" doc:id="71b5e800-14e4-477d-81ad-4a8c6c82c8fd" config-ref="Database_Config">
+				<db:sql >{ call dbo.sp_update_training_history (:site,
+	 :emplId,
+	 :equipmentNumber, 
+	 :evcMiningActivityType, 
+	 :evcOperationsShift,
+	 :evcOperatingHours,
+	 :journalNum,
+	 :operationDate) } </db:sql>
+				<db:input-parameters ><![CDATA[#[{
+	"site": payload.Dimension.element[0],
+	"emplId": payload.EmplId,
+	"equipmentNumber": payload.EquipmentNumber,
+	"evcMiningActivityType": payload.EVCMiningActivityType,
+	"evcOperationsShift": payload.EVCOperationsShift,
+	"evcOperatingHours": if(isEmpty(payload.EVCShiftOperationHours)) 0 else payload.EVCShiftOperationHours,
+	"journalNum": payload.JournalNum,
+	"operationDate": payload.OperationsDate
+}]]]></db:input-parameters>
+			</db:stored-procedure>
+		</foreach>
+		<db:stored-procedure doc:name="Stored procedure" doc:id="41b47d02-ec5e-483a-93f7-607ae8c738ae" config-ref="Database_Config" target="insertedList">
+			<db:sql >{ call sp_load_training_history }</db:sql>
+		</db:stored-procedure>
+		<logger level="INFO" doc:name="Logger" doc:id="477d96f3-f354-48b5-a313-109cc4a4c7dc" message="#[vars.insertedList]"/>
+	</sub-flow>
+	<flow name="mule-fileDBListenerFlow" doc:id="2605262b-87d1-463c-a1ea-b3fd95409109" initialState="stopped">
+		<scheduler doc:name="Scheduler" doc:id="6437cfce-12ad-43ba-a171-e998a57c8a4c" >
+			<scheduling-strategy >
+				<fixed-frequency frequency="30000" startDelay="1000"/>
+			</scheduling-strategy>
+		</scheduler>
+		<os:retrieve doc:name="Retrieve" doc:id="70f418c8-f4dc-490f-b84d-6dd80953e500" key="lastTimestamp" objectStore="watermarkStore">
+			<os:default-value ><![CDATA[#[2017-09-11T00:00:00.000Z]]]></os:default-value>
+		</os:retrieve>
+		<db:stored-procedure doc:name="Stored procedure" doc:id="cca44c64-a552-49a3-b901-9ea2e1d262b6" config-ref="Database_Config">
+			<db:sql >{ call sp_load_training_history (:operationsDate) }</db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	"operationsDate": vars.lastTimestamp
+}]]]></db:input-parameters>
+		</db:stored-procedure>
+		<logger level="INFO" doc:name="Logger" doc:id="360574b9-dfb5-4cdd-a1c8-0906bf00be6f" message="#[payload]"/>
+		<set-variable value="#[max(payload map $.OperationsDate)]" doc:name="Set Variable" doc:id="d2445362-b3b7-457b-8e86-bf9060327c3e" variableName="maxTimestamp"/>
+		<logger level="INFO" doc:name="Logger" doc:id="3199ae12-f4ab-4a95-893d-09e7285e23dd" message="#[vars.maxTimestamp]"/>
+		<os:store doc:name="Store" doc:id="2a0dda9a-74c4-46ed-851c-c3cc0c3638da" key="lastTimestamp" objectStore="watermarkStore">
+			<os:value ><![CDATA[#[vars.maxTimestamp]]]></os:value>
+		</os:store>
+	</flow>
+</mule>
